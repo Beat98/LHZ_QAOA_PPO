@@ -23,6 +23,32 @@ import copy
 import json
 from pathlib import Path
 
+from tqdm import tqdm
+from stable_baselines3.common.callbacks import BaseCallback
+
+
+class ProgressBarCallback(BaseCallback):
+    def __init__(self, total_timesteps):  # total_timesteps is the total number of steps the model will be trained for
+        super(ProgressBarCallback, self).__init__()
+        self.pbar = None
+        self.total_timesteps = total_timesteps
+
+    def _on_training_start(self):
+        """ This method is called before the first rollout starts. """
+        if self.pbar is not None:
+            self.pbar.close()
+        self.pbar = tqdm(total=self.total_timesteps)
+
+    def _on_step(self):
+        """ This method is called for each step in training. """
+        self.pbar.update(1)
+        return True
+
+    def _on_training_end(self):
+        """ This method is called after training ends. """
+        self.pbar.close()
+
+
 def rename_sequence(sequence):
     mapping = {
         'X': '\hat{\\text{X}}',
@@ -40,6 +66,7 @@ def rename_sequence(sequence):
     for items in mapping.items():
         sequence = sequence.replace(items[0], items[1])
     return sequence
+
 
 def save_data_json(folder_name: str, filename: str, data):
     """Creates the folder data (if it doesn't exist) in the parent directory and stores a json file of
@@ -88,13 +115,6 @@ def generate_setup_file(folder_name: str, data):
 
     data = copy.copy(data)
 
-    if 'reward' in data: del data['reward']
-    if 'min_energy' in data: del data['min_energy']
-    if 'gate_sequences' in data: del data['gate_sequences']
-    if 'gate_length' in data: del data['gate_length']
-    if 'qaoa_time' in data: del data['qaoa_time']
-    if 'program_str_data' in data: del data['program_str_data']
-
     folder_path = Path(__file__).parent.joinpath("data", f"{folder_name}")
     folder_path.mkdir(parents=True, exist_ok=True)
 
@@ -112,24 +132,6 @@ def get_triv_sequence(gate_length):
     pattern = "ZXZXZX"
     sequence = (pattern * (gate_length // len(pattern))) + pattern[:gate_length % len(pattern)]
     return sequence[:gate_length]
-
-
-# def get_data_tensorboard(logdir):
-#     # Create an EventAccumulator object to load the TensorBoard data
-#     event_acc = EventAccumulator(logdir)
-#     event_acc.Reload()
-#
-#     # Get the list of tags available in the log files
-#     tags = event_acc.Tags()["scalars"]
-#
-#     # Extract the training data for each tag and store it in a dictionary
-#     data_dict = {}
-#     for tag in tags:
-#         event_values = event_acc.Scalars(tag)
-#         data_list = [(event.step, event.value) for event in event_values]
-#         data_dict[tag] = data_list
-#
-#     return data_dict
 
 
 def moving_average(list, window_lenght=100):
@@ -211,47 +213,50 @@ def load_masked_ppo(model, env, num_episodes=10):
 
     return data
 
+
 def run_qaoa_optimization(problem_instance, program_str, reps=100, qaoa_optimizer="SLSQP"):
     problem_instance.set_programstring(program_str)
 
     result_container = problem_instance.repeated_scipy_optimization(
-            optimization_method=qaoa_optimizer, reps=reps)
+        optimization_method=qaoa_optimizer, reps=reps)
     best_result = result_container.get_lowest_objective_value()
 
     return best_result
 
-def get_gates(obs):
-    gate_sequence = ""
-    for i, int_gate in enumerate(obs):
-        gate_sequence += ["_", "X", "C", "Z"][int(int_gate)]
-    return gate_sequence
+
+# def get_gates(obs):
+#     gate_sequence = ""
+#     for i, int_gate in enumerate(obs):
+#         gate_sequence += ["_", "X", "C", "Z"][int(int_gate)]
+#     return gate_sequence
 
 
-def get_problem_hdict(num_qubits):
-    """Problem configurations for group retreat presentation"""
-    if num_qubits == 3:
-        constraints = [[0, 1, 2]]
-        constraint_strength = 3.0
-        local_fields = [1, -1, -1]
-    elif num_qubits == 4:
-        constraints = [[0, 1, 2, 3]]
-        constraint_strength = 3.0
-        local_fields = [1, -1, -1, -1]
-    elif num_qubits == 6:
-        constraints = [[0, 1, 3], [1, 3, 4, 5], [1, 2, 4]]
-        constraint_strength = 3.0
-        local_fields = [1, -1, 1, -1, -1, 1]
-    else:
-        raise ValueError("We have problems for 3, 4 and 6 qubits")
-
-    h_dict = hdict_physical_not_full(jij=local_fields, constraints=constraints, cstrength=constraint_strength)
-
-    return h_dict, constraints, constraint_strength, local_fields
+# def get_problem_hdict(num_qubits):
+#     """Problem configurations for group retreat presentation"""
+#     if num_qubits == 3:
+#         constraints = [[0, 1, 2]]
+#         constraint_strength = 3.0
+#         local_fields = [1, -1, -1]
+#     elif num_qubits == 4:
+#         constraints = [[0, 1, 2, 3]]
+#         constraint_strength = 3.0
+#         local_fields = [1, -1, -1, -1]
+#     elif num_qubits == 6:
+#         constraints = [[0, 1, 3], [1, 3, 4, 5], [1, 2, 4]]
+#         constraint_strength = 3.0
+#         local_fields = [1, -1, 1, -1, -1, 1]
+#     else:
+#         raise ValueError("We have problems for 3, 4 and 6 qubits")
+#
+#     h_dict = hdict_physical_not_full(jij=local_fields, constraints=constraints, cstrength=constraint_strength)
+#
+#     return h_dict, constraints, constraint_strength, local_fields
 
 
 def calculate_E_min_E_max(data=None, problem_dict=None):
     if problem_dict is None:
         problem_dict = data["problem_dictionary"]
+
     def generate_states(num_qubits):
         qubit_0 = basis(2, 0)
         qubit_1 = basis(2, 1)
@@ -278,6 +283,7 @@ def calculate_E_min_E_max(data=None, problem_dict=None):
 def generate_configs(num_qubits):
     configs = list(product([-1, 1], repeat=num_qubits))
     return [np.array(config) for config in configs]
+
 
 def filter_equivalent_sequences(sequence_list):
     filtered_sequences = []
@@ -311,6 +317,7 @@ def calculate_E_min_E_max_logical(data=None, problem_dict=None, jij=None):
 
     return min(expectation_val_list), max(expectation_val_list)
 
+
 def calculate_approximation_ratio(energy, std_dev=None, problem_dict=None, logical_qaoa=True):
     rescaled_std_dev = None
     if logical_qaoa:
@@ -324,18 +331,19 @@ def calculate_approximation_ratio(energy, std_dev=None, problem_dict=None, logic
 
     return rescaled_energy, rescaled_std_dev
 
+
 def calculate_approximation_ratio_simple(E, E_min):
-    return E/E_min
+    return E / E_min
 
-def calculate_one_minus_residual_energy_and_std(energy, std_dev=None, problem_dict=None, logical_qaoa=True):
-    rescaled_std_dev = None
-    if logical_qaoa:
-        E_min, E_max = calculate_E_min_E_max_logical(problem_dict=problem_dict)
-    else:
-        E_min, E_max = calculate_E_min_E_max(problem_dict=problem_dict)
-
-    rescaled_energy = 1 - (energy - E_min) / (E_max - E_min)
-    if std_dev is not None:
-        rescaled_std_dev = std_dev / (E_max - E_min)
-
-    return rescaled_energy, rescaled_std_dev
+# def calculate_one_minus_residual_energy_and_std(energy, std_dev=None, problem_dict=None, logical_qaoa=True):
+#     rescaled_std_dev = None
+#     if logical_qaoa:
+#         E_min, E_max = calculate_E_min_E_max_logical(problem_dict=problem_dict)
+#     else:
+#         E_min, E_max = calculate_E_min_E_max(problem_dict=problem_dict)
+#
+#     rescaled_energy = 1 - (energy - E_min) / (E_max - E_min)
+#     if std_dev is not None:
+#         rescaled_std_dev = std_dev / (E_max - E_min)
+#
+#     return rescaled_energy, rescaled_std_dev

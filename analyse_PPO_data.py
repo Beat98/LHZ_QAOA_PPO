@@ -142,8 +142,7 @@ l_s = [0,1,2]
 # l = 1
 # n_steps_s = [25, 50, 100, 250, 500]
 
-data_set_name = f"interesting_{num_qubits}_qubits_instance"
-# data_set_name = "hyperparameter_optimization"
+data_set_name = f"test_data_set"
 
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
@@ -157,13 +156,10 @@ for i, l in enumerate(l_s):
     if l == 0:
         commutator = None
     elif l == 1:
-        commutator = "both"
+        commutator = "l_1"
     elif l == 2:
-        commutator = "second_order_v2"
-    experiment_name = os.path.join(f"commutators_{commutator}", f"num_qubits_{num_qubits}_n_max_gates_{n_max_gates}",
-                                   f"local_fields_{''.join([str(f) for f in local_fields])}_num_executions_{num_executions}_reps_{reps}")  # _optimization_target_{optimization_target}_final_decoding_{final_decoding}
-    # experiment_name = os.path.join("n_steps", f"num_qubits_{num_qubits}_commutator_{commutator}_num_"
-    #                                           f"executions_{num_executions}_reps_{reps}", f"n_steps_{n_steps}")
+        commutator = "l_2"
+    experiment_name = "experiment_1"
     result = get_visualize_and_process_data(ax, colors[i], data_set_name, experiment_name, plot=True, save=True,
                                             end=end, window_length=200)
     pp.pprint(result)
