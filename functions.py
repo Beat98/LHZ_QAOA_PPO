@@ -1,11 +1,9 @@
-from itertools import product
-
-import sys
-from pathlib import Path
-import os
 import csv
+import sys
+from itertools import product
+from pathlib import Path
+
 from qutip import expect, tensor, basis
-from tqdm import tqdm
 
 sys.path.append(f'{Path(__file__).parent.joinpath("ENV").joinpath("lhz")}')
 sys.path.append(f'{Path(__file__).parent.joinpath("ENV").joinpath("qaoa")}')
@@ -13,7 +11,6 @@ sys.path.append(f'{Path(__file__).parent.joinpath("ENV").joinpath("qaoa")}')
 from lhz.qutip_hdicts import hdict_physical_not_full
 from lhz.core import n_logical
 # from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
-from sb3_contrib.ppo_mask import MaskablePPO
 
 import gym
 import numpy as np
@@ -66,18 +63,6 @@ def rename_sequence(sequence):
     for items in mapping.items():
         sequence = sequence.replace(items[0], items[1])
     return sequence
-
-
-def save_data_json(folder_name: str, filename: str, data):
-    """Creates the folder data (if it doesn't exist) in the parent directory and stores a json file of
-    the 'data' with name filename.json"""
-
-    folder_path = Path(__file__).parent.joinpath("data", f"{folder_name}")
-    folder_path.mkdir(parents=True, exist_ok=True)
-
-    with open(f'{folder_path.joinpath(f"{filename}.json")}', 'w') as json_file:
-        json.dump(data, json_file)
-
 
 def save_data(folder_name: str, filename: str, data):
     """Creates the folder data (if it doesn't exist) in the parent directory and stores a numpy file of

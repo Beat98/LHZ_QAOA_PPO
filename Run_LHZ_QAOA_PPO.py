@@ -1,5 +1,7 @@
 import os
 
+from matplotlib import pyplot as plt
+
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["NUMEXPR_NUM_THREADS"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -21,7 +23,7 @@ from ENV.LHZ_QAOA_env import QaoaEnv
 from functions import generate_setup_file, save_data, mask_fn, load_data_from_csv, ProgressBarCallback
 
 
-def run_lhz_qaoa_ppo(config=None):
+def run_lhz_qaoa_ppo(config=None, data_set_name="test_data_set"):
     """
     Runs several executions of a complete PPO learning process with 'n_timesteps' timesteps. Stores learning data of
     each execution separately in data folder. Stores important experiment information (the setup) in setup.txt together
@@ -103,8 +105,6 @@ def run_lhz_qaoa_ppo(config=None):
         raise "check number of qubits"
 
     # folder where the data dictionary is stored
-    data_set_name = "test_data_set"
-    experiment_name = "experiment_1"
 
     problem_dict = {"num_qubits": num_qubits, "constraints": constraints, "constraint_strength": constraint_strength,
                     "local_fields": local_fields}
@@ -169,7 +169,7 @@ def run_lhz_qaoa_ppo(config=None):
         csv_data = load_data_from_csv(csv_path)
         generate_setup_file(folder_name, data)
         data.update(csv_data)
-        save_data(folder_name=os.path.join(data_set_name, experiment_name), filename=f"execution_{i}", data=data)
+        save_data(folder_name=data_set_name, filename=f"execution_{i}", data=data)
 
 
 if __name__ == "__main__":
@@ -198,10 +198,16 @@ if __name__ == "__main__":
 
     cmd_args = {key: value for key, value in vars(args).items() if value is not None}
 
+    # Set a custumized configuration
     custom_config = {
-        "n_timesteps": 500
+        "n_timesteps": 1000,
+        "additional_unitaries": "l_1"
     }
 
+    # Command line arguments have priority over the custom config
     combined_config = {**custom_config, **cmd_args}
 
-    run_lhz_qaoa_ppo(config=combined_config)
+    data_set_name = "test_data_set"
+    experiment_name = "experiment_1"
+
+    run_lhz_qaoa_ppo(config=combined_config, data_set_name="test_data_set")

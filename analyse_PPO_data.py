@@ -1,184 +1,202 @@
+import os
+import pprint
 from collections import Counter
+from collections import OrderedDict
 
 import matplotlib.pyplot as plt
 import numpy as np
-import os
-import pprint
 import seaborn as sns
 
-pp = pprint.PrettyPrinter(indent=1, width=100)
-from functions import get_data_list, moving_average, save_data, calculate_approximation_ratio, load_data, \
-    get_triv_sequence, get_standard_sequence, calculate_approximation_ratio_simple
+from functions import (
+    get_data_list, moving_average, save_data, calculate_approximation_ratio
+)
 
+# Plot configuration
 sns.set_style('ticks')
-plt.rcParams['mathtext.fontset'] = 'cm'
-plt.rcParams['font.family'] = 'serif'
-plt.rcParams['font.serif'] = 'Times New Roman'
-plt.rcParams['font.size'] = 18
-plt.rcParams['axes.grid'] = False
-plt.rcParams['grid.linestyle'] = '--'
-plt.rcParams['grid.linewidth'] = 0.5
-plt.rcParams['axes.xmargin'] = 0
-plt.rcParams['axes.ymargin'] = 0.02
+plt.rcParams.update({
+    'mathtext.fontset': 'cm',
+    'font.family': 'serif',
+    'font.serif': 'Times New Roman',
+    'font.size': 18,
+    'axes.grid': False,
+    'grid.linestyle': '--',
+    'grid.linewidth': 0.5,
+    'axes.xmargin': 0,
+    'axes.ymargin': 0.02
+})
+
+pp = pprint.PrettyPrinter(indent=1, width=100)
 
 
-def get_visualize_and_process_data(ax, color, data_set_name, experiment_name, window_length=100, plot=False, save=False,
-                                   end=-1):
+def load_and_select_data(data_set_name, num_executions, selection=None):
+    """
+    Load experiment data and optionally select certain experiment executions for processing.
 
-    # load data
-    data_list = get_data_list(os.path.join(data_set_name, experiment_name), num_executions=num_executions)
-    # selection of data
+    Args:
+        data_set_name (str): The name of the data set.
+        num_executions (int): Number of executions of the experiment.
+        selection (list, optional): List of indices to select specific experiment executions.
+
+    Returns:
+        list: Processed list of data entries.
+    """
+
+    # List of the data of the selected experiment executions. Type List[Dict[...], Dict[...]]
+    data_list = get_data_list(data_set_name, num_executions=num_executions)
     if selection is not None:
-        data_list = np.array(data_list)
-        data_list = data_list[selection]
+        data_list = np.array(data_list)[selection]
+    return data_list
 
-    best_sequences, final_sequences, final_energies, best_energies, learning_times, num_unique_seq = [], [], [], [], [], []
+
+def extract_and_process_data(data_list, end, save):
+    """
+    Extract energies and sequences from the data and extract interesting statistics.
+
+    Args:
+        data_list (list): List of experiment data.
+        end (int): The endpoint to slice data.
+
+    Returns:
+        tuple:
+            * data_dict (dict): including interesting experiment data
+            * energy_matrix (np.array): matrix of the QAOA energies from all selected experiments
+
+    """
+    best_sequences, final_sequences = [], []
+    final_energies, best_energies = [], []
+    learning_times, num_unique_seq = [], []
     energy_matrix = []
-    for i, data in enumerate(data_list):
+
+    # Iterate through each experiment execution data
+    for data in data_list:
+        # Extract and slice the QAOA energy and sequences data up to the specified 'end' index
         qaoa_energy = data['min_energy'][:end]
         energy_matrix.append(qaoa_energy)
-
         sequences = data['gate_sequences'][:end]
+
+        # Identify unique sequences and record their count
         unique_seq = np.unique(sequences)
         num_unique_seq.append(len(unique_seq))
 
-        # Track the best gate sequence in this learning process
+        # Find the index of the minimum QAOA energy (best energy) in the sliced data
         min_energy_idx = np.argmin(qaoa_energy)
 
-        best_sequence = sequences[min_energy_idx]
-        best_energy = qaoa_energy[min_energy_idx]
-        best_sequences.append(best_sequence)
-        best_energies.append(best_energy)
+        # Record the best sequence and corresponding energy
+        best_sequences.append(sequences[min_energy_idx])
+        best_energies.append(qaoa_energy[min_energy_idx])
 
-        # Track the final gate sequence in this learning process
+        # Record the final (last) sequence and corresponding energy
         final_sequences.append(sequences[-1])
         final_energies.append(qaoa_energy[-1])
 
+        # Track the learning time for this experiment
         learning_times.append(data["learning_time"])
 
-    # Count occurrences of each sequence
+    # Count the occurrences of each best sequence and final sequence across all experiments
     best_sequences_counts = dict(Counter(best_sequences))
     final_sequences_counts = dict(Counter(final_sequences))
 
-
-    mean_energies = np.mean(energy_matrix, axis=0)
-    if plot:
-
-        # for n, mean_energies in enumerate(energy_matrix):
-
-        if optimization_target == "logical_energy":
-            logical_qaoa = True
-        else:
-            logical_qaoa = False
-
-        mean_energies, _ = calculate_approximation_ratio(mean_energies,
-                                                     problem_dict=data_list[0]["problem_dict"],
-                                                     logical_qaoa=logical_qaoa)
-        xs = np.arange(len(mean_energies))
-        ax.plot(xs, mean_energies, linestyle="None", marker=".", alpha=0.3, markersize=2)  # ,color=color)#, label='PPO agent mean')
-
-        moving_averages = moving_average(mean_energies, window_length)
-        ax.plot(xs, moving_averages, label=f'l = {l}', color=color)  # label=f'execution {n}'
-        # ax.set_xticks(xs)
-        # ax.set_xticklabels(sequences, rotation='vertical')
-        # ax.set_title(rf"$K= {num_qubits}$")
-        ax.set_xlabel('episodes')
-        ax.set_ylabel(r'approximation ratio $r$')
-        # ax.set_ylabel(r'$E_{qaoa}/E_{GS}$')
-
-        # ax.set_ylim([0.05,0.7])
-
-        ax.grid(True)
-        plt.tight_layout(pad=0.1)
-        if save:
-            plt.savefig(os.path.join("data", data_set_name, experiment_name), dpi=400)
-
+    # Extract additional experiment information
     experiment_info = {key: data_list[0][key] for key in data_list[0].keys() if
-                       key not in ['min_energy', 'gate_sequences', 'gate_length', 'reward']}
+                       key not in ['min_energy', 'gate_sequences', 'gate_length', 'reward', 'learning_time']}
 
-    data_dict = {
-        'num_unique_seq_with_final_energy_and_sequence': list(
-            zip(num_unique_seq, np.round(final_energies, 3), final_sequences)),
+    # Constructing the data_dict with metrics and statistics
+    data_dict = OrderedDict({
+        'experiment_info': experiment_info,
         'avg_quantum_calls': np.mean(num_unique_seq),
         'avg_learning_time': np.mean(learning_times),
-        'best_sequences_counts': best_sequences_counts,
-        'final_sequences_counts': final_sequences_counts,
         'final_seq_with_energy': {
             seq: [energy for f_seq, energy in zip(final_sequences, final_energies) if f_seq == seq]
             for seq in final_sequences
         },
+        'final_sequences_counts': final_sequences_counts,
         'best_seq_with_energy': {
             seq: [energy for b_seq, energy in zip(best_sequences, best_energies) if b_seq == seq]
             for seq in best_sequences
         },
-        'experiment_info': experiment_info
-    }
+        'best_sequences_counts': best_sequences_counts,
+        'num_unique_seq_with_final_energy_and_sequence': list(
+            zip(num_unique_seq, np.round(final_energies, 3), final_sequences)),
+    })
+
     if save:
         data_dict['experiment_info']['policy'] = str(data_dict['experiment_info']['policy'])
-        save_data(folder_name=os.path.join(data_set_name, experiment_name), filename="processed_data",
-                  data=data_dict)
-    return data_dict
+        save_data(
+            folder_name=data_set_name,
+            filename="processed_data",
+            data=data_dict
+        )
+    return data_dict, energy_matrix
 
 
-optimization_target = "logical_energy"
-final_decoding = "logical_mean"
+def plot_data(ax, energy_matrix, color, window_length, save):
+    """
+    Plot experiment data and save it if specified.
 
-num_qubits = 6
-num_executions = 10
-reps = 10
+    Args:
+        ax (matplotlib.axes.Axes): The axis to plot data on.
+        color (str): Color for the plot.
+        window_length (int): Window length for moving average.
+        save (bool): Whether to save the plot.
 
-if num_qubits == 6:
-    constraints = [[0, 1, 3], [1, 2, 3, 4], [3, 4, 5]]
-    local_fields = [-1, -1, -1, 1, -1, -1]
-    n_max_gates = 9
-elif num_qubits == 10:
-    constraints = [[0, 1, 4], [4, 5, 7], [7, 8, 9], [1, 2, 4, 5], [2, 3, 5, 6], [5, 6, 7, 8]]
-    local_fields = [-1, -1, -1, -1, 1, -1, 1, -1, 1, -1]
-    # local_fields = [-1, -1, -1, -1, 1, -1, 1, 1, 1, 1]
-    n_max_gates = 6
+    Returns:
+        dict: Processed data dictionary.
+    """
 
-# n_max_gates = 3
-l_s = [0,1,2]
-# l = 1
-# n_steps_s = [25, 50, 100, 250, 500]
+    # Calculate mean energies
+    mean_energies = np.mean(energy_matrix, axis=0)
+    logical_qaoa = optimization_target == "logical_energy"
 
-data_set_name = f"test_data_set"
+    # Calculate approximation ratio
+    mean_energies, _ = calculate_approximation_ratio(
+        mean_energies, problem_dict=data_list[0]["problem_dict"], logical_qaoa=logical_qaoa
+    )
 
-colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    xs = np.arange(len(mean_energies))
+    ax.plot(xs, mean_energies, linestyle="None", marker=".", alpha=0.3, markersize=2)
 
-selection = None
-end = 2500
+    # Calculate and plot the moving average
+    moving_averages = moving_average(mean_energies, window_length)
+    ax.plot(xs, moving_averages, label=f'moving average', color=color)
 
-fig, ax = plt.subplots(figsize=(9, 5))
+    # Set axis labels and grid
+    ax.set_xlabel('Episodes')
+    ax.set_ylabel(r'Approximation ratio $r$')
+    ax.grid(True)
+    plt.tight_layout(pad=0.1)
+    plt.legend()
 
-for i, l in enumerate(l_s):
-# for i, n_steps in enumerate(n_steps_s):
-    if l == 0:
-        commutator = None
-    elif l == 1:
-        commutator = "l_1"
-    elif l == 2:
-        commutator = "l_2"
-    experiment_name = "experiment_1"
-    result = get_visualize_and_process_data(ax, colors[i], data_set_name, experiment_name, plot=True, save=True,
-                                            end=end, window_length=200)
-    pp.pprint(result)
+    if save:
+        plt.savefig(os.path.join("data", data_set_name), dpi=400)
+    plt.show()
 
-file_name = f"num_qubits_{num_qubits}_gate_length_{n_max_gates}_reps_100_num_constraints_violated_None"
-folder_name = os.path.join("non_triv_local_fields", f"symmetry_cleaned_standard_better_then_trivial")
-data_non_triv_instances = load_data(folder_name, file_name)
-triv_seq_energy = data_non_triv_instances[tuple(local_fields)][get_triv_sequence(n_max_gates)]
-standard_seq_energy = data_non_triv_instances[tuple(local_fields)][get_standard_sequence(n_max_gates)]
-E_min = data_non_triv_instances[tuple(local_fields)]["E_min"]
 
-triv_seq_energy = calculate_approximation_ratio_simple(triv_seq_energy, E_min)
-standard_seq_energy = calculate_approximation_ratio_simple(standard_seq_energy, E_min)
-xs = np.arange(end)
-ax.plot(xs, [triv_seq_energy for e in range(end)], 'k', linestyle="dashed", label="trivial seq.")
-ax.plot(xs, [standard_seq_energy for e in range(end)], 'r', linestyle="dashed", label="standard seq.")
-ax.legend()
+# --- Main Execution Block ---
+if __name__ == "__main__":
+    # Parameters and configurations
+    optimization_target = "logical_energy"
+    final_decoding = "logical_mean"
+    num_qubits = 6
+    num_executions = 1
+    reps = 10
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    selection = None
+    end = 2500
 
-plt.savefig(os.path.join("data", "final_plots", f"comparison_ls_num_qubits_{num_qubits}"), dpi=400)
-# plt.savefig(os.path.join("data", "final_plots", f"comparison_n_steps_num_qubits_{num_qubits}"), dpi=400)
+    # Plot initialization
+    fig, ax = plt.subplots(figsize=(9, 5))
+    data_set_name = "test_data_set"
 
-plt.show()
+    # Load and select data
+    data_list = load_and_select_data(data_set_name, num_executions, selection)
+
+    # Process data and extract interesting statistics
+    data_dict, energy_matrix = extract_and_process_data(data_list, end, save=True)
+
+    # Plot data
+    plot_data(ax, energy_matrix, colors[0], window_length=200, save=True)
+
+    # Print the data_dict including statistics and experiment information
+    pp.pprint(data_dict)
+
+

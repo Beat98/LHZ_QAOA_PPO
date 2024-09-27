@@ -4,7 +4,6 @@ import numpy as np
 import gym
 from gym.spaces.discrete import Discrete
 from gym.spaces.box import Box
-from gym import spaces
 from lhz.core import n_logical
 from lhz.qutip_hdicts import hdict_physical_not_full
 
