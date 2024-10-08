@@ -62,6 +62,7 @@ information about the theory please refer to my thesis
    
 4. **Make Environment changes**
 
+   The Environment can be found in order "ENV".
    You can adjust f.e. the reward function in LHZ_QAOA_env.py. If you want to use a more recent QAOA or LHZ code
-   here is the place to incorporate it.
+   this is the place to incorporate it.
    
