@@ -7,9 +7,9 @@ conduct further research on this topic.
 ## Description
 
 Implementation of gate sequence optimization on parity architectures with the Proximal 
-Policy Optimization (PPO) algorithm. There are three gate pools available or optimization. For more
+Policy Optimization (PPO) algorithm. There are three gate pools available for optimization. For more
 information about the theory please refer to my thesis 
-"Machine Learning enhanced Quantum Optimization on Parity architectures", which is included in the order "docs".
+"Machine Learning enhanced Quantum Optimization on Parity architectures", which is included in the folder "docs".
 
 ## Getting Started
 
@@ -35,7 +35,7 @@ information about the theory please refer to my thesis
     ```bash
    python Run_LHZ_QAOA_PPO.py
    ```
-   You can modify parameters directly in the commandline. F.e.:
+   You can modify parameters directly in the commandline. e.g.:
    ```bash
    python Run_LHZ_QAOA_PPO.py --n_max_gates 6 --num_executions 5
    ```
